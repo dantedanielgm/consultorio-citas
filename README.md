@@ -12,11 +12,7 @@ El programa pregunta qué día hábil del mes es hoy (del 1 al 20) y muestra el 
 
 ## Cómo ejecutar las pruebas
 
-```
-python pruebas.py
-```
-
-Debe terminar con `Pruebas correctas: 44 de 44`.
+En el menú, la opción 8 corre las 44 pruebas. Debe salir `Pruebas correctas: 44 de 44`.
 
 ## Qué hace cada opción
 
@@ -28,6 +24,7 @@ Debe terminar con `Pruebas correctas: 44 de 44`.
 | 4 Cierre de caja | HU04 Cierre de caja del día |
 | 5 Indicadores | HU05 Indicadores del día y del mes |
 | 6 Reporte de seguros | HU06 Reporte mensual para la aseguradora |
+| 8 Pruebas | Comprueba las funciones con datos conocidos |
 
 ## Integrantes
 
