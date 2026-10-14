@@ -1,0 +1,412 @@
+# Consultorio: registro de citas y cierre diario de caja.
+# Trabajo final de Fundamentos de Programacion 1 (NRC 631).
+# Usa solo lo visto en el curso: secuencial, selectiva, repetitiva, arreglos, cadenas y funciones.
+
+PRECIO_PARTICULAR = 80.0
+PRECIO_CONTROL = 40.0
+COPAGO_SEGURO = 20.0
+DEUDA_SEGURO = 60.0
+DESCUENTO_MAYOR = 0.20
+EDAD_ADULTO_MAYOR = 65
+TURNOS_DEL_DIA = 16
+DIAS_DEL_MES = 20
+
+
+# ---------------------------------------------------------------- calculos
+
+def posicion(dia, turno):
+    # La agenda del mes es un arreglo de 20 x 16 = 320 casilleros.
+    # El dia 1 ocupa los casilleros 0 a 15, el dia 2 los casilleros 16 a 31, etc.
+    return (dia - 1) * TURNOS_DEL_DIA + (turno - 1)
+
+
+def hora_del_turno(turno):
+    # turno 1 = 8:00, turno 2 = 8:30 ... turno 16 = 15:30
+    minutos = 8 * 60 + (turno - 1) * 30
+    hora = minutos // 60
+    resto = minutos % 60
+    if resto < 10:
+        texto = str(hora) + ":0" + str(resto)
+    else:
+        texto = str(hora) + ":" + str(resto)
+    return texto
+
+
+def es_numero(texto):
+    # Revisa letra por letra que el texto tenga solo digitos.
+    if len(texto) == 0:
+        return False
+    for i in range(0, len(texto), 1):
+        letra = texto[i:i + 1]
+        if letra < "0" or letra > "9":
+            return False
+    return True
+
+
+def dni_valido(dni):
+    return len(dni) == 8 and es_numero(dni)
+
+
+def celular_valido(celular):
+    return len(celular) == 9 and es_numero(celular)
+
+
+def edad_valida(texto):
+    return es_numero(texto) and int(texto) <= 120
+
+
+def tipo_valido(tipo):
+    return tipo == "P" or tipo == "S" or tipo == "C"
+
+
+def ocultar_dni(dni):
+    # 45871236 se muestra como ****1236
+    return "****" + dni[4:8]
+
+
+def calcular_cobro(tipo, edad):
+    if tipo == "S":
+        cobro = COPAGO_SEGURO
+    elif tipo == "C":
+        cobro = PRECIO_CONTROL
+    else:
+        cobro = PRECIO_PARTICULAR
+        if edad >= EDAD_ADULTO_MAYOR:
+            cobro = cobro - cobro * DESCUENTO_MAYOR
+    return cobro
+
+
+def contar_libres(dnis, dia):
+    libres = 0
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        if dnis[posicion(dia, turno)] == "":
+            libres = libres + 1
+    return libres
+
+
+def turnos_libres(dnis, dia):
+    # Devuelve un arreglo de 16 casilleros: el numero del turno si esta libre, 0 si esta ocupado.
+    mi_arreglo = [0] * TURNOS_DEL_DIA
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        if dnis[posicion(dia, turno)] == "":
+            mi_arreglo[turno - 1] = turno
+    return mi_arreglo
+
+
+def buscar_paciente(dnis, dni):
+    # Devuelve el casillero de una cita anterior de ese DNI, o -1 si es un paciente nuevo.
+    encontrado = -1
+    for pos in range(0, len(dnis), 1):
+        if dnis[pos] == dni:
+            encontrado = pos
+    return encontrado
+
+
+def buscar_en_dia(dnis, nombres, dia, texto):
+    # Busca por DNI completo o por el inicio del nombre. Devuelve el turno, o 0 si no esta.
+    encontrado = 0
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        pos = posicion(dia, turno)
+        if dnis[pos] != "" and encontrado == 0:
+            if dnis[pos] == texto or nombres[pos][0:len(texto)] == texto:
+                encontrado = turno
+    return encontrado
+
+
+def calcular_cierre(dnis, tipos, edades, asistencias, dia):
+    # Recorre los 16 turnos del dia con contadores y acumuladores.
+    agendadas = 0
+    atendidos = 0
+    faltas = 0
+    caja = 0.0
+    seguros = 0.0
+    perdido = 0.0
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        pos = posicion(dia, turno)
+        if dnis[pos] != "":
+            agendadas = agendadas + 1
+            cobro = calcular_cobro(tipos[pos], edades[pos])
+            deuda = 0.0
+            if tipos[pos] == "S":
+                deuda = DEUDA_SEGURO
+            if asistencias[pos] == "S":
+                atendidos = atendidos + 1
+                caja = caja + cobro
+                seguros = seguros + deuda
+            elif asistencias[pos] == "N":
+                faltas = faltas + 1
+                perdido = perdido + cobro + deuda
+    resultado = [agendadas, atendidos, faltas, caja, seguros, perdido]
+    return resultado
+
+
+def porcentaje(parte, total):
+    if total == 0:
+        return 0.0
+    return parte / total * 100
+
+
+def resumen_mes(dnis, tipos, edades, asistencias):
+    # Suma los cierres de todos los dias del mes que tuvieron citas.
+    resumen = [0, 0, 0, 0, 0.0, 0.0, 0.0]
+    for dia in range(1, DIAS_DEL_MES + 1, 1):
+        cierre = calcular_cierre(dnis, tipos, edades, asistencias, dia)
+        if cierre[0] > 0:
+            resumen[0] = resumen[0] + 1
+            for i in range(0, len(cierre), 1):
+                resumen[i + 1] = resumen[i + 1] + cierre[i]
+    return resumen
+
+
+def total_seguros(tipos, asistencias):
+    # Lo que debe la aseguradora: 60 soles por cada asegurado atendido en el mes.
+    total = 0.0
+    for pos in range(0, len(tipos), 1):
+        if tipos[pos] == "S" and asistencias[pos] == "S":
+            total = total + DEUDA_SEGURO
+    return total
+
+
+def guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, pos, dni, nombre, celular, tipo, edad, asistencia):
+    dnis[pos] = dni
+    nombres[pos] = nombre
+    celulares[pos] = celular
+    tipos[pos] = tipo
+    edades[pos] = edad
+    asistencias[pos] = asistencia
+
+
+def borrar_cita(dnis, nombres, celulares, tipos, edades, asistencias, pos):
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, pos, "", "", "", "", 0, "")
+
+
+# ---------------------------------------------------------------- pedir datos (validacion con while)
+
+def pedir_numero(mensaje, minimo, maximo):
+    texto = input(mensaje)
+    while not (es_numero(texto) and int(texto) >= minimo and int(texto) <= maximo):
+        print("  Escriba un numero entre", minimo, "y", maximo)
+        texto = input(mensaje)
+    return int(texto)
+
+
+def pedir_dni():
+    dni = input("DNI: ")
+    while not dni_valido(dni):
+        print("  El DNI debe tener 8 digitos")
+        dni = input("DNI: ")
+    return dni
+
+
+def pedir_nombre():
+    nombre = input("Nombre: ")
+    while nombre == "":
+        print("  El nombre no puede quedar vacio")
+        nombre = input("Nombre: ")
+    return nombre
+
+
+def pedir_celular():
+    celular = input("Celular: ")
+    while not celular_valido(celular):
+        print("  El celular debe tener 9 digitos")
+        celular = input("Celular: ")
+    return celular
+
+
+def pedir_tipo():
+    tipo = input("Tipo (P particular, C control, S seguro): ")
+    while not tipo_valido(tipo):
+        print("  Escriba P, C o S")
+        tipo = input("Tipo (P particular, C control, S seguro): ")
+    return tipo
+
+
+def pedir_letra(mensaje, primera, segunda):
+    letra = input(mensaje)
+    while letra != primera and letra != segunda:
+        print("  Escriba", primera, "o", segunda)
+        letra = input(mensaje)
+    return letra
+
+
+# ---------------------------------------------------------------- opciones del menu (una por historia)
+
+def mostrar_dia(dnis, nombres, asistencias, dia):
+    print("Dia", dia, "- libres:", contar_libres(dnis, dia), "de", TURNOS_DEL_DIA)
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        pos = posicion(dia, turno)
+        if dnis[pos] == "":
+            print(" ", turno, hora_del_turno(turno), "libre")
+        else:
+            print(" ", turno, hora_del_turno(turno), nombres[pos], ocultar_dni(dnis[pos]), asistencias[pos])
+
+
+def reservar(dnis, nombres, celulares, tipos, edades, asistencias):
+    # HU01 Reservar una cita
+    dia = pedir_numero("Dia que pide el paciente (1 a 20): ", 1, DIAS_DEL_MES)
+    while contar_libres(dnis, dia) == 0:
+        print("  Ese dia esta lleno. Ofrezca otro dia.")
+        dia = pedir_numero("Dia que pide el paciente (1 a 20): ", 1, DIAS_DEL_MES)
+    print("Turnos libres:", turnos_libres(dnis, dia))
+    turno = pedir_numero("Turno elegido: ", 1, TURNOS_DEL_DIA)
+    while dnis[posicion(dia, turno)] != "":
+        print("  Ese turno esta ocupado")
+        turno = pedir_numero("Turno elegido: ", 1, TURNOS_DEL_DIA)
+    dni = pedir_dni()
+    anterior = buscar_paciente(dnis, dni)
+    if anterior != -1:
+        nombre = nombres[anterior]
+        celular = celulares[anterior]
+        edad = edades[anterior]
+        print("Paciente conocido:", nombre, "- celular", celular, "- edad", edad)
+    else:
+        nombre = pedir_nombre()
+        celular = pedir_celular()
+        edad = pedir_numero("Edad: ", 0, 120)
+    tipo = pedir_tipo()
+    pos = posicion(dia, turno)
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, pos, dni, nombre, celular, tipo, edad, "-")
+    print("Cita reservada: dia", dia, "a las", hora_del_turno(turno), "- pagara S/", calcular_cobro(tipo, edad))
+
+
+def atender(dnis, nombres, tipos, edades, asistencias, hoy):
+    # HU02 Atender al paciente que llega
+    texto = input("Nombre o DNI del paciente: ")
+    turno = buscar_en_dia(dnis, nombres, hoy, texto)
+    if turno == 0:
+        print("  No esta en la agenda de hoy")
+    else:
+        pos = posicion(hoy, turno)
+        cobro = calcular_cobro(tipos[pos], edades[pos])
+        print(nombres[pos], ocultar_dni(dnis[pos]), "- turno de las", hora_del_turno(turno))
+        print("Debe pagar S/", cobro)
+        if tipos[pos] == "S":
+            print("Se anotan S/", DEUDA_SEGURO, "que debe la aseguradora")
+        asistencias[pos] = "S"
+        print("Asistencia marcada")
+
+
+def reprogramar(dnis, nombres, celulares, tipos, edades, asistencias):
+    # HU03 Reprogramar o cancelar una cita
+    dia = pedir_numero("Dia de la cita (1 a 20): ", 1, DIAS_DEL_MES)
+    turno = pedir_numero("Turno de la cita: ", 1, TURNOS_DEL_DIA)
+    pos = posicion(dia, turno)
+    if dnis[pos] == "":
+        print("  En ese turno no hay ninguna cita")
+    else:
+        accion = pedir_letra("M para mover, C para cancelar: ", "M", "C")
+        if accion == "M":
+            nuevo_dia = pedir_numero("Nuevo dia (1 a 20): ", 1, DIAS_DEL_MES)
+            nuevo_turno = pedir_numero("Nuevo turno: ", 1, TURNOS_DEL_DIA)
+            while dnis[posicion(nuevo_dia, nuevo_turno)] != "":
+                print("  Ese turno esta ocupado. Elija otro.")
+                nuevo_dia = pedir_numero("Nuevo dia (1 a 20): ", 1, DIAS_DEL_MES)
+                nuevo_turno = pedir_numero("Nuevo turno: ", 1, TURNOS_DEL_DIA)
+            destino = posicion(nuevo_dia, nuevo_turno)
+            guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, destino,
+                         dnis[pos], nombres[pos], celulares[pos], tipos[pos], edades[pos], "-")
+            print("Cita movida al dia", nuevo_dia, "a las", hora_del_turno(nuevo_turno))
+        else:
+            print("Cita cancelada. El turno queda libre.")
+        borrar_cita(dnis, nombres, celulares, tipos, edades, asistencias, pos)
+
+
+def cerrar_caja(dnis, nombres, tipos, edades, asistencias, hoy):
+    # HU04 Cierre de caja del dia
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        pos = posicion(hoy, turno)
+        if dnis[pos] != "" and asistencias[pos] == "-":
+            print("Sin marcar:", hora_del_turno(turno), nombres[pos])
+            asistencias[pos] = pedir_letra("  Asistio? (S o N): ", "S", "N")
+    cierre = calcular_cierre(dnis, tipos, edades, asistencias, hoy)
+    print("CIERRE DEL DIA", hoy)
+    print("Atendidos:", cierre[1], "- Inasistencias:", cierre[2])
+    print("Dinero en caja: S/", cierre[3])
+    print("Por cobrar a la aseguradora: S/", cierre[4])
+
+
+def indicadores(dnis, tipos, edades, asistencias, hoy):
+    # HU05 Indicadores del dia y del mes
+    cierre = calcular_cierre(dnis, tipos, edades, asistencias, hoy)
+    print("HOY - ocupacion:", round(porcentaje(cierre[0], TURNOS_DEL_DIA), 1), "%")
+    print("HOY - inasistencia:", round(porcentaje(cierre[2], cierre[1] + cierre[2]), 1), "%")
+    print("HOY - ingreso perdido: S/", cierre[5])
+    mes = resumen_mes(dnis, tipos, edades, asistencias)
+    print("MES - dias con citas:", mes[0])
+    print("MES - ocupacion:", round(porcentaje(mes[1], mes[0] * TURNOS_DEL_DIA), 1), "%")
+    print("MES - inasistencia:", round(porcentaje(mes[3], mes[2] + mes[3]), 1), "%")
+    print("MES - ingreso perdido: S/", mes[6])
+
+
+def reporte_aseguradora(dnis, nombres, tipos, asistencias, estado):
+    # HU06 Reporte mensual para la aseguradora
+    print("ASEGURADOS ATENDIDOS EN EL MES")
+    for dia in range(1, DIAS_DEL_MES + 1, 1):
+        for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+            pos = posicion(dia, turno)
+            if tipos[pos] == "S" and asistencias[pos] == "S":
+                print(" Dia", dia, hora_del_turno(turno), nombres[pos], ocultar_dni(dnis[pos]), "S/", DEUDA_SEGURO)
+    print("Total que debe la aseguradora: S/", total_seguros(tipos, asistencias))
+    print("Estado del reporte:", estado)
+    accion = input("E para marcarlo enviado, C para marcarlo cobrado, Enter para seguir: ")
+    if accion == "E":
+        estado = "enviado"
+    elif accion == "C":
+        estado = "cobrado"
+    return estado
+
+
+def cargar_ejemplo(dnis, nombres, celulares, tipos, edades, asistencias):
+    # Citas de ejemplo para la demostracion. Los pacientes son ficticios.
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 1), "45871236", "Ana Torres", "987654321", "P", 34, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 2), "09874563", "Luis Paredes", "912345678", "P", 70, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 3), "41025874", "Maria Quispe", "934567812", "S", 45, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 4), "70123456", "Jorge Salas", "956781234", "S", 29, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 5), "44556677", "Rosa Medina", "945612378", "P", 51, "N")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(1, 6), "10203040", "Pedro Rojas", "978123456", "C", 62, "N")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(2, 1), "41025874", "Maria Quispe", "934567812", "C", 45, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(2, 3), "72345678", "Carla Rios", "923456781", "S", 38, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(2, 4), "08765432", "Elena Vargas", "967812345", "P", 66, "S")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(2, 7), "46789012", "Diego Luna", "989012345", "P", 27, "N")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(3, 1), "45871236", "Ana Torres", "987654321", "C", 34, "-")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(3, 2), "73456789", "Mario Campos", "990123456", "S", 58, "-")
+    guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, posicion(3, 5), "09988776", "Julia Ramos", "901234567", "P", 72, "-")
+
+
+def principal():
+    total = DIAS_DEL_MES * TURNOS_DEL_DIA
+    dnis = [""] * total
+    nombres = [""] * total
+    celulares = [""] * total
+    tipos = [""] * total
+    edades = [0] * total
+    asistencias = [""] * total
+    cargar_ejemplo(dnis, nombres, celulares, tipos, edades, asistencias)
+
+    hoy = pedir_numero("Que dia habil del mes es hoy? (1 a 20): ", 1, DIAS_DEL_MES)
+    estado_reporte = "sin enviar"
+    opcion = ""
+    while opcion != "7":
+        print()
+        mostrar_dia(dnis, nombres, asistencias, hoy)
+        print("1 Reservar  2 Llego un paciente  3 Reprogramar o cancelar")
+        print("4 Cierre de caja  5 Indicadores  6 Reporte de seguros  7 Salir")
+        opcion = input("Opcion: ")
+        if opcion == "1":
+            reservar(dnis, nombres, celulares, tipos, edades, asistencias)
+        elif opcion == "2":
+            atender(dnis, nombres, tipos, edades, asistencias, hoy)
+        elif opcion == "3":
+            reprogramar(dnis, nombres, celulares, tipos, edades, asistencias)
+        elif opcion == "4":
+            cerrar_caja(dnis, nombres, tipos, edades, asistencias, hoy)
+        elif opcion == "5":
+            indicadores(dnis, tipos, edades, asistencias, hoy)
+        elif opcion == "6":
+            estado_reporte = reporte_aseguradora(dnis, nombres, tipos, asistencias, estado_reporte)
+        elif opcion != "7":
+            print("  Elija una opcion del 1 al 7")
+
+
+principal()
