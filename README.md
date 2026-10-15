@@ -28,4 +28,4 @@ En el menú, la opción 8 corre las 44 pruebas. Debe salir `Pruebas correctas: 4
 
 ## Integrantes
 
-Gutiérrez, Dante · Apaza, Jhonatan · Cabellos, Carlos
+Gutiérrez, Dante · Apaza, Jhonatan · Cabellos, Carlos-Agenda y reserva
