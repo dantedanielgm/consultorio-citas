@@ -8,7 +8,7 @@ Trabajo final de Fundamentos de Programación 1 (UPC EPE, NRC 631).
 python consultorio.py
 ```
 
-El programa toma la fecha de hoy de la computadora y muestra el menú. Atiende de lunes a viernes y no deja reservar días que ya pasaron. Trae pacientes de ejemplo el 1 y el 2 del mes, y tres citas sin marcar el día de hoy.
+El programa trabaja con un escenario de prueba fijo: siempre abre el viernes 16 de octubre de 2026 a las 10:00. Para usarlo de verdad se cambia `FECHA_DE_HOY` por `date.today()`. Al reservar muestra los días de atención del mes numerados (de lunes a viernes) y luego los turnos libres con su hora. No ofrece turnos que ya pasaron. Trae pacientes de ejemplo el 1 y el 2 del mes, y tres citas sin marcar el día de hoy.
 
 ## Cómo ejecutar las pruebas
 

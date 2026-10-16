@@ -14,6 +14,10 @@ DIAS_DEL_MES = 31
 DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre"]
 
+# escenario de prueba: el programa siempre abre en el mismo dia y a la misma hora
+FECHA_DE_HOY = date(2026, 10, 16)   # para usarlo de verdad: date.today()
+HORA_DE_AHORA = 10 * 60             # las 10:00, contadas en minutos
+
 
 # funciones de calculo
 
@@ -28,8 +32,8 @@ def es_laborable(fecha):
 
 
 def fecha_del_dia(dia):
-    # el dia del mes actual como fecha real
-    hoy = date.today()
+    # el dia del mes del escenario como fecha real del calendario
+    hoy = FECHA_DE_HOY
     return date(hoy.year, hoy.month, dia)
 
 
@@ -43,7 +47,7 @@ def es_dia_laborable(dia):
 
 def dias_del_mes_actual():
     # cuantos dias tiene este mes: resta el primero de este mes al primero del siguiente
-    hoy = date.today()
+    hoy = FECHA_DE_HOY
     if hoy.month == 12:
         siguiente = date(hoy.year + 1, 1, 1)
     else:
@@ -51,14 +55,29 @@ def dias_del_mes_actual():
     return (siguiente - date(hoy.year, hoy.month, 1)).days
 
 
+def dias_habiles(hoy):
+    # arreglo con los dias de lunes a viernes que quedan del mes, desde hoy
+    ultimo = dias_del_mes_actual()
+    cantidad = 0
+    for dia in range(hoy, ultimo + 1, 1):
+        if es_dia_laborable(dia):
+            cantidad = cantidad + 1
+    dias = [0] * cantidad
+    i = 0
+    for dia in range(hoy, ultimo + 1, 1):
+        if es_dia_laborable(dia):
+            dias[i] = dia
+            i = i + 1
+    return dias
+
+
 def posicion(dia, turno):
     # en que casillero de la agenda va el turno
     return (dia - 1) * TURNOS_DEL_DIA + (turno - 1)
 
 
-def hora_del_turno(turno):
-    # el turno 1 es a las 8:00 y cada turno dura 30 minutos
-    minutos = 8 * 60 + (turno - 1) * 30
+def texto_hora(minutos):
+    # 540 minutos se muestran como "9:00"
     hora = minutos // 60
     resto = minutos % 60
     if resto < 10:
@@ -66,6 +85,16 @@ def hora_del_turno(turno):
     else:
         texto = str(hora) + ":" + str(resto)
     return texto
+
+
+def hora_del_turno(turno):
+    # el turno 1 es a las 8:00 y cada turno dura 30 minutos
+    return texto_hora(8 * 60 + (turno - 1) * 30)
+
+
+def turno_vencido(turno, minutos):
+    # el turno ya termino: empieza a las 8:00 y dura 30 minutos
+    return minutos >= 8 * 60 + turno * 30
 
 
 def es_numero(texto):
@@ -127,6 +156,23 @@ def turnos_libres(dnis, dia):
         if dnis[posicion(dia, turno)] == "":
             mi_arreglo[turno - 1] = turno
     return mi_arreglo
+
+
+def turno_disponible(dnis, dia, turno, hoy):
+    # se puede reservar si esta libre y, si es hoy, si su hora no ha pasado
+    if dnis[posicion(dia, turno)] != "":
+        return False
+    if dia == hoy and turno_vencido(turno, HORA_DE_AHORA):
+        return False
+    return True
+
+
+def contar_disponibles(dnis, dia, hoy):
+    disponibles = 0
+    for turno in range(1, TURNOS_DEL_DIA + 1, 1):
+        if turno_disponible(dnis, dia, turno, hoy):
+            disponibles = disponibles + 1
+    return disponibles
 
 
 def buscar_paciente(dnis, dni):
@@ -226,15 +272,16 @@ def pedir_numero(mensaje, minimo, maximo):
     return int(texto)
 
 
-def pedir_dia_de_cita(hoy):
-    # solo desde hoy hasta fin de mes, y de lunes a viernes
-    ultimo = dias_del_mes_actual()
-    mensaje = "Dia que pide el paciente (" + str(hoy) + " a " + str(ultimo) + "): "
-    dia = pedir_numero(mensaje, hoy, ultimo)
-    while not es_dia_laborable(dia):
-        print("  El", nombre_del_dia(dia), "el consultorio esta cerrado")
-        dia = pedir_numero(mensaje, hoy, ultimo)
-    return dia
+def pedir_dia_de_cita(dnis, hoy):
+    # muestra los dias de atencion numerados y se elige uno por su numero
+    dias = dias_habiles(hoy)
+    if len(dias) == 0:
+        print("  Ya no quedan dias de atencion este mes")
+        return 0
+    print("Dias de atencion que quedan:")
+    mostrar_mes(dnis, dias, hoy)
+    numero = pedir_numero("Numero del dia (1 a " + str(len(dias)) + "): ", 1, len(dias))
+    return dias[numero - 1]
 
 
 def pedir_dni():
@@ -285,20 +332,40 @@ def mostrar_dia(dnis, nombres, asistencias, dia):
         pos = posicion(dia, turno)
         if dnis[pos] == "":
             print(" ", turno, hora_del_turno(turno), "libre")
+        elif asistencias[pos] == "-" and turno_vencido(turno, HORA_DE_AHORA):
+            print(" ", turno, hora_del_turno(turno), nombres[pos], ocultar_dni(dnis[pos]), "- paso su hora")
         else:
             print(" ", turno, hora_del_turno(turno), nombres[pos], ocultar_dni(dnis[pos]), asistencias[pos])
 
 
+def mostrar_mes(dnis, dias, hoy):
+    # cada dia con su numero, como los turnos, y cuantos turnos se pueden reservar
+    for i in range(0, len(dias), 1):
+        print(" ", i + 1, nombre_del_dia(dias[i]), "- libres:", contar_disponibles(dnis, dias[i], hoy), "de", TURNOS_DEL_DIA)
+
+
+def mostrar_turnos_libres(dnis, dia, hoy):
+    # los turnos libres uno debajo de otro, con su hora; no se muestran los ocupados (0)
+    # ni, si es hoy, los que ya pasaron
+    print("Turnos libres del", nombre_del_dia(dia) + ":")
+    libres = turnos_libres(dnis, dia)
+    for i in range(0, len(libres), 1):
+        if libres[i] != 0 and turno_disponible(dnis, dia, libres[i], hoy):
+            print(" ", libres[i], hora_del_turno(libres[i]))
+
+
 def reservar(dnis, nombres, celulares, tipos, edades, asistencias, hoy):
     # HU01 Reservar una cita
-    dia = pedir_dia_de_cita(hoy)
-    while contar_libres(dnis, dia) == 0:
-        print("  Ese dia esta lleno. Ofrezca otro dia.")
-        dia = pedir_dia_de_cita(hoy)
-    print("Turnos libres:", turnos_libres(dnis, dia))
+    dia = pedir_dia_de_cita(dnis, hoy)
+    if dia == 0:
+        return
+    while contar_disponibles(dnis, dia, hoy) == 0:
+        print("  Ese dia ya no tiene turnos libres. Ofrezca otro dia.")
+        dia = pedir_dia_de_cita(dnis, hoy)
+    mostrar_turnos_libres(dnis, dia, hoy)
     turno = pedir_numero("Turno elegido: ", 1, TURNOS_DEL_DIA)
-    while dnis[posicion(dia, turno)] != "":
-        print("  Ese turno esta ocupado")
+    while not turno_disponible(dnis, dia, turno, hoy):
+        print("  Ese turno esta ocupado o ya paso su hora")
         turno = pedir_numero("Turno elegido: ", 1, TURNOS_DEL_DIA)
     dni = pedir_dni()
     anterior = buscar_paciente(dnis, dni)
@@ -344,11 +411,15 @@ def reprogramar(dnis, nombres, celulares, tipos, edades, asistencias, hoy):
     else:
         accion = pedir_letra("M para mover, C para cancelar: ", "M", "C")
         if accion == "M":
-            nuevo_dia = pedir_dia_de_cita(hoy)
+            nuevo_dia = pedir_dia_de_cita(dnis, hoy)
+            if nuevo_dia == 0:
+                return
+            mostrar_turnos_libres(dnis, nuevo_dia, hoy)
             nuevo_turno = pedir_numero("Nuevo turno: ", 1, TURNOS_DEL_DIA)
-            while dnis[posicion(nuevo_dia, nuevo_turno)] != "":
-                print("  Ese turno esta ocupado. Elija otro.")
-                nuevo_dia = pedir_dia_de_cita(hoy)
+            while not turno_disponible(dnis, nuevo_dia, nuevo_turno, hoy):
+                print("  Ese turno esta ocupado o ya paso su hora. Elija otro.")
+                nuevo_dia = pedir_dia_de_cita(dnis, hoy)
+                mostrar_turnos_libres(dnis, nuevo_dia, hoy)
                 nuevo_turno = pedir_numero("Nuevo turno: ", 1, TURNOS_DEL_DIA)
             destino = posicion(nuevo_dia, nuevo_turno)
             guardar_cita(dnis, nombres, celulares, tipos, edades, asistencias, destino,
@@ -364,8 +435,11 @@ def cerrar_caja(dnis, nombres, tipos, edades, asistencias, hoy):
     for turno in range(1, TURNOS_DEL_DIA + 1, 1):
         pos = posicion(hoy, turno)
         if dnis[pos] != "" and asistencias[pos] == "-":
-            print("Sin marcar:", hora_del_turno(turno), nombres[pos])
-            asistencias[pos] = pedir_letra("  Asistio? (S o N): ", "S", "N")
+            if turno_vencido(turno, HORA_DE_AHORA):
+                print("Paso su hora sin marcar:", hora_del_turno(turno), nombres[pos])
+                asistencias[pos] = pedir_letra("  Asistio? (S o N): ", "S", "N")
+            else:
+                print("Todavia no es su hora:", hora_del_turno(turno), nombres[pos])
     cierre = calcular_cierre(dnis, tipos, edades, asistencias, hoy)
     print("CIERRE DEL", nombre_del_dia(hoy).upper())
     print("Atendidos:", cierre[1], "- Inasistencias:", cierre[2])
@@ -506,9 +580,9 @@ def principal():
     tipos = [""] * total
     edades = [0] * total
     asistencias = [""] * total
-    hoy = date.today().day
+    hoy = FECHA_DE_HOY.day
     cargar_ejemplo(dnis, nombres, celulares, tipos, edades, asistencias, hoy)
-    print("Hoy es", nombre_del_dia(hoy))
+    print("Hoy es", nombre_del_dia(hoy) + ", son las", texto_hora(HORA_DE_AHORA), "(escenario de prueba)")
     if not es_dia_laborable(hoy):
         print("Hoy el consultorio esta cerrado")
     estado_reporte = "sin enviar"
